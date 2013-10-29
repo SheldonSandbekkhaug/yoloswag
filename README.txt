@@ -22,21 +22,10 @@ holla
 
 
 
-To be implemented in subsequent versions after release:
-
-(?) gang
-	declares an array of yolos
+Possible upcoming features for subsequent versions:
 
 (?) throwback
 	jumps to a line number or homie
 
 (?) homie
 	gives a specific line number an identifier to be throwback-ed
-
-
-
-
-
-
-
-
