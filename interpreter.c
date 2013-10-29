@@ -1,4 +1,5 @@
-/* Author: Sheldon Sandbekkhaug
+/* Author(s): Sheldon Sandbekkhaug
+              Ryan Lorey
    Written 2013
 
 */
@@ -45,7 +46,7 @@ bool check_malloc(void* pointer);
 int main(int argc, STRING *argv)
 {
     int i;
-    bool filenamenotgiven = TRUE;
+    bool filenamegiven = FALSE;
 
     delimeters[0] = ' ';
     delimeters[1] = '\t';
@@ -64,18 +65,18 @@ int main(int argc, STRING *argv)
       else
       {
         // If we found a real file, open it
-        filenamenotgiven = FALSE;
+        filenamegiven = TRUE;
         input = fopen(*argv,"r");
 
         if (input == NULL)
         {
-          filenamenotgiven = TRUE;
+          filenamegiven = FALSE;
         }
       }
     }
 
     // Use stdin if no valid filename was given
-    if (filenamenotgiven)
+    if (!filenamegiven)
     {
       input = stdin;
       read_input(stdin);
