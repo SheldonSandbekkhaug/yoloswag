@@ -29,7 +29,8 @@ struct Variable
 };
 
 typedef struct Variable Variable;
-Variable *memory;
+Variable *memory; // "Virtual" memory
+long long memory_size = 1024;
 long long active_address; // Location in memory of the variable to modify
 long long stack_pointer = 1;
 
@@ -75,6 +76,9 @@ int main(int argc, STRING *argv)
       }
     }
 
+    memory = malloc(memory_size * sizeof(Variable));
+    check_malloc(memory);
+
     // Use stdin if no valid filename was given
     if (!filenamegiven)
     {
@@ -88,13 +92,17 @@ int main(int argc, STRING *argv)
     }
 
 
-    // TODO: put in own function?
-    for(;stack_pointer >= 0; stack_pointer--)
+    // TODO: Write a function to free everything in memory
+/*    for(stack_pointer = stack_pointer - 1;stack_pointer >= 0; stack_pointer--)
     {
-      free(memory[stack_pointer].name);
-      //free(&memory[stack_pointer]);
+      printf("freeing %x\n", &memory[stack_pointer]);
+      if (&memory[stack_pointer] != NULL)
+      {
+        printf("name: %s\n", memory[stack_pointer].name);
+        free(memory[stack_pointer].name);
+      }
     }
-
+*/
     free(memory);
 
     exit(0);
@@ -105,17 +113,13 @@ void scan_args(STRING s)
 {
     /* check each character of the option list for
        its meaning. */
-    int size = 4096;
 
     while (*++s != '\0')
         switch (*s)
             {
             case 'M': // Maximum memory usage for client program data
                 *s++;
-                printf("%s\n", s); // TODO: remove
-                size = atoi(s);
-                memory = malloc(size * sizeof(Variable));
-                check_malloc(memory);
+                memory_size = atoi(s);
 
                 // Stop loop from reading the rest of this argument
                 s[1] = '\0'; 
@@ -155,6 +159,7 @@ void read_input(FILE *source)
     // Process the line once we hit '#'
     if (c == '#')
     {
+      printf("line length: %d\n", line_length); // TODO: remove
       buffer[line_length] = '\0';
 
       process_line(buffer);
@@ -178,11 +183,12 @@ void read_input(FILE *source)
     {
       if (line_length >= buffer_size-1)
       {
+        printf("increasing buffer size from %d\n", buffer_size); //TODO: remove
         // Increase the size of the buffer
         buffer[line_length] = '\0';
-        buffer = realloc(buffer, 2 * line_length * sizeof(char));
+        buffer = realloc(buffer, 2 * (line_length+1) * sizeof(char));
         check_malloc(buffer);
-        buffer_size = 2 * line_length;
+        buffer_size = 2 * (line_length + 1);
       }
 
       // Add c to the buffer
@@ -196,9 +202,10 @@ void read_input(FILE *source)
 void process_line(STRING line)
 {
   /* Parse a line and do commands.  */
-  STRING element = malloc(sizeof(line));
-  STRING next_element = malloc(sizeof(line));
+  STRING element = malloc(strlen(line));
+  STRING next_element = malloc(strlen(line));
   check_malloc(element);
+  check_malloc(next_element);
   printf("Processed the following line: %s\n", line);
   
   element = strtok(line, delimeters);
@@ -206,14 +213,13 @@ void process_line(STRING line)
   while(element != NULL)
   {
     printf("element: %s\n", element);
+    printf("active_address: %x\n", active_address);
 
     process_element(element);
 
     element = strtok(NULL, delimeters);
     if (next_element == NULL)
     {
-      printf("next element is NULL\n");
-      //printf("line: %s\n", line);
       element = NULL;
     }
   }
@@ -227,7 +233,14 @@ void process_element(STRING element)
   /* Do things with the element given.
 
   */
-    if (are_equivalent(element, "YOLO"))
+  STRING uppercase_element;
+  long long temp;
+
+  uppercase_element = malloc(sizeof(element));
+  check_malloc(uppercase_element);
+  convert_to_upper(element, uppercase_element);
+
+    if (are_equivalent(uppercase_element, "YOLO"))
     {
       // Declare variable
       printf("doing yolo\n");
@@ -235,37 +248,43 @@ void process_element(STRING element)
       active_address = stack_pointer;
       stack_pointer++;      
     }
-    else if (are_equivalent(element, "SWAG"))
+    else if (are_equivalent(uppercase_element, "SWAG"))
     {
       // Increment variable
       printf("doing swag\n");
+      memory[active_address].data = memory[active_address].data + 1;
+      printf("DATA: %c\n", memory[active_address].data);
     }
-    else if (are_equivalent(element, "RATCHET"))
+    else if (are_equivalent(uppercase_element, "RATCHET"))
     {
       // Decrement variable
       printf("doing ratchet\n");
     }
-    else if (are_equivalent(element, "HOLLA"))
+    else if (are_equivalent(uppercase_element, "HOLLA"))
     {
       // Print variable
       printf("doing holla\n");
-      printf("active address: %c\n", memory[active_address].data);
+      printf("DATA: %c\n", memory[active_address].data);
     }
     else
     {
       // It's a variable name
-      // Check if the variable exists
-      active_address = variable_address(element);
-      if (active_address == 0)
+      // Check if the Variable with name element exists
+      printf("about to check if variable exists\n");
+      temp = variable_address(element);
+      if (temp == 0)
       {
         // Create new Variable
-        // TODO: I think I have to alloc the struct first
-        memory[active_address].name = element;
-        memory[active_address].data = 0;
-
-        // TODO: remove
-        printf("var at active address: %s\n", memory[active_address].name);
-        printf("var at active address: %d\n", memory[active_address].data);
+        Variable *v = malloc(sizeof(Variable));
+        check_malloc(v);
+        v->name = element;
+        v->data = 0;
+        memory[active_address] = *v;
+        printf("data: %d\n", memory[active_address].data);
+      }
+      else
+      {
+        active_address = temp;
       }
 
     }
@@ -276,18 +295,28 @@ void process_element(STRING element)
 //TODO
 long long variable_address(STRING element)
 {
+  /* Return the address in virtual memory of the variable with name element.
+     Return 0 if that element could not be found.
+  
+  */
+  long long i = stack_pointer;
+  for(; i >= 0; i--)
+  {
+    if(memory[i].name != NULL && are_equivalent(element, memory[i].name))
+    {
+      return i;
+    }
+  }
   return 0;
 }
 
 
 bool are_equivalent(STRING s1, STRING s2)
 {
-  /* Returns TRUE if s1 and s2 are the same ASCII characters, case-insensitive.
+  /* Returns TRUE if s1 and s2 are the same ASCII characters, case-sensitive.
      Returns FALSE otherwise.
   */
   int result;
-  STRING s1_upper;
-  STRING s2_upper;
 
   // Check if their lengths are the same
   if (strlen(s1) != strlen(s2))
@@ -295,16 +324,8 @@ bool are_equivalent(STRING s1, STRING s2)
     return FALSE;
   }
 
-  // Convert s1 to uppercase
-  s1_upper = malloc(sizeof(s1));
-  check_malloc(s1_upper);
-  convert_to_upper(s1, s1_upper);
-
-  // Don't convert s2 to uppercase, it should already be uppercase
-  s2_upper = s2;
-
   // Check if each byte is the same
-  result = memcmp(s1_upper, s2_upper, strlen(s1));
+  result = memcmp(s1, s2, strlen(s1));
   if (result == 0) // 0 means no characters differ
   {
     return TRUE;
