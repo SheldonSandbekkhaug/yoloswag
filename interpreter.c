@@ -19,6 +19,7 @@ typedef char* STRING;
 char delimeters[16];
 
 FILE *input;
+unsigned long long line_number = 0;
 bool debug = FALSE;
 
 // An entry in memory
@@ -29,16 +30,17 @@ struct Variable
 };
 
 typedef struct Variable Variable;
-Variable *memory; // "Virtual" memory
-long long memory_size = 1024;
-long long active_address; // Location in memory of the variable to modify
-long long stack_pointer = 1;
+Variable *memory; // "Virtual" memory. address 0 is NULL
+unsigned long long memory_size = 1024; // Default memory size
+unsigned long long active_address; // Location in memory of the variable to modify
+unsigned long long stack_pointer = 1;
+char adjustment;
 
 void scan_args(STRING s);
 void read_input(FILE *source);
 void process_line(STRING line);
-void process_element(STRING element);
-long long variable_address(STRING element);
+void do_adjustment(unsigned long long line_size);
+unsigned long long variable_address(STRING element);
 bool are_equivalent(STRING s1, STRING s2);
 void convert_to_upper(STRING src, STRING dest);
 bool check_malloc(void* pointer);
@@ -139,8 +141,7 @@ void scan_args(STRING s)
 
 void read_input(FILE *source)
 {
-/* Read a line from source and process it.
-*/
+  /* Read a line from source and process it. */
   STRING buffer;
   STRING temp_buffer;
   unsigned long long int buffer_size; // Current size of the malloc'd space
@@ -156,18 +157,28 @@ void read_input(FILE *source)
   {
     c = getc(source);
 
+    // Increment line_number every line
+    if (c == '\n')
+    {
+      line_number++;
+    }
+
     // Process the line once we hit '#'
     if (c == '#')
     {
-      printf("line length: %d\n", line_length); // TODO: remove
       buffer[line_length] = '\0';
 
-      process_line(buffer);
+      // TODO: remove
+//      printf("line_length: %llu\n", line_length);
+//      printf("buffer: %s\n", buffer);
+
+      // Don't process the line unless something is in it
+      if (line_length > 0) process_line(buffer);
       free(buffer);
 
       // Create a new buffer for the next line
       buffer = NULL;
-      buffer = malloc(sizeof(char) * 8);
+      buffer = malloc(sizeof(char) * starting_buffer_size);
       check_malloc(buffer);
       buffer_size = starting_buffer_size;
       buffer[0] = '\0'; // Just in case there is nothing on the line
@@ -183,9 +194,9 @@ void read_input(FILE *source)
     {
       if (line_length >= buffer_size-1)
       {
-        printf("increasing buffer size from %d\n", buffer_size); //TODO: remove
+//        printf("increasing buffer size from %llu\n", buffer_size); //TODO: remove
         // Increase the size of the buffer
-        buffer[line_length] = '\0';
+        //buffer[line_length] = '\0';
         buffer = realloc(buffer, 2 * (line_length+1) * sizeof(char));
         check_malloc(buffer);
         buffer_size = 2 * (line_length + 1);
@@ -202,106 +213,256 @@ void read_input(FILE *source)
 void process_line(STRING line)
 {
   /* Parse a line and do commands.  */
-  STRING element = malloc(strlen(line));
-  STRING next_element = malloc(strlen(line));
-  check_malloc(element);
-  check_malloc(next_element);
-  printf("Processed the following line: %s\n", line);
+  unsigned long long line_size = strlen(line);
+  STRING token;
+  STRING uppercase_token;
+  STRING next_token;
+  STRING variable_name;
+  unsigned long long temp;
+  unsigned char printable; // For HOLLA
+
+  token = malloc(line_size);
+  check_malloc(token);
+
+  uppercase_token = malloc(line_size);
+  check_malloc(uppercase_token);
+
+  next_token = malloc(line_size);
+  check_malloc(next_token);
+
+//  printf("Processing the following line: %s\n", line);
   
-  element = strtok(line, delimeters);
+  // Get the first token on the line
+  token = strtok(line, delimeters);
 
-  while(element != NULL)
+  if (token == NULL)
   {
-    printf("element: %s\n", element);
-    printf("active_address: %x\n", active_address);
+    // Don't do anything if no valid token was found
+    return;
+  }
+  else
+  {
+    convert_to_upper(token, uppercase_token);
+  }
 
-    process_element(element);
+  // Do something with the token
+  if (are_equivalent(uppercase_token, "YOLO"))
+  {
+    // YOLO means to declare an 8-bit variable
 
-    element = strtok(NULL, delimeters);
-    if (next_element == NULL)
+    // Get the next token. It should be a variable name.
+    next_token = strtok(NULL, delimeters);
+
+    // Check if the Variable with name token exists
+    temp = variable_address(token);
+    if (temp == 0)
     {
-      element = NULL;
+      // Create new Variable
+      //printf("creating new variable named %s\n", next_token);
+      Variable *v = malloc(sizeof(Variable));
+      check_malloc(v);
+
+      variable_name = malloc(sizeof(char) * strlen(next_token));
+      check_malloc(variable_name);
+      strcpy(variable_name, next_token);
+      v->name = variable_name;
+
+      v->data = 0;
+
+      // Add a new value to memory and increment the stack pointer
+      active_address = stack_pointer;
+      memory[active_address] = *v;
+
+      // TODO: remove
+//      printf("name: %s\n", memory[active_address].name);
+//      printf("data: %d\n", memory[active_address].data);
+
+      stack_pointer++;
+    }
+    else
+    {
+      fprintf(stderr, "Multiple declaration of %s at line %llu\n",
+              next_token, line_number);
     }
   }
+  else if (are_equivalent(uppercase_token, "SWAG"))
+  {
+    // Increment variable
+    adjustment++;
+    do_adjustment(line_size);
+
+//    memory[active_address].data = memory[active_address].data + 1;
+//    printf("DATA: %c\n", memory[active_address].data);
+
+  }
+  else if (are_equivalent(uppercase_token, "RATCHET"))
+  {
+//    printf("doing ratchet\n");
+    // Decrement variable
+    adjustment--;
+    do_adjustment(line_size);
+  }
+  else if (are_equivalent(uppercase_token, "HOLLA"))
+  {
+    // Print variable as ASCII character
+
+    next_token = strtok(NULL, delimeters);
+
+    // Check if the Variable with name token exists
+    temp = variable_address(next_token);
+    active_address = temp;
+    if (temp != 0)
+    {
+      // The variable exists, so we can print it
+      printable = (unsigned char)memory[active_address].data;
+      printable = printable & 0x000000FF;
+      printf("%c", printable);
+    }
+    else
+    {
+      // The variable does not exist
+      fprintf(stderr, "ERROR: undefined variable \"%s\" at line %llu\n",
+              next_token, line_number);
+      exit(-1);
+    }
+  }
+  else if (are_equivalent(uppercase_token, "HOLLANUMBER"))
+  {
+    // Print variable as a number
+    next_token = strtok(NULL, delimeters);
+
+    // Check if the Variable with name token exists
+    temp = variable_address(next_token);
+    active_address = temp;
+    if (temp != 0)
+    {
+      // The variable exists, so we can print it
+      printable = (unsigned char)memory[active_address].data;
+      printable = printable & 0x000000FF;
+      printf("%d", printable);
+    }
+    else
+    {
+      // The variable does not exist
+      fprintf(stderr, "ERROR: undefined variable \"%s\" at line %llu\n",
+              next_token, line_number);
+      exit(-1);
+    }
+  }
+  else
+  {
+    printf("unknown token found: %s\n", uppercase_token); // TODO: remove
+
+/*    // It's a variable name
+    // Check if the Variable with name token exists
+  //  printf("about to check if variable exists\n");
+    temp = variable_address(token);
+    if (temp == 0)
+    {
+      // Create new Variable
+      Variable *v = malloc(sizeof(Variable));
+      check_malloc(v);
+      v->name = token;
+      v->data = 0;
+      memory[active_address] = *v;
+      //printf("data: %d\n", memory[active_address].data); // TODO: remove
+    }
+    else
+    {
+      active_address = temp;
+    }*/
+  }
+
+  adjustment = 0;
+
+//  printf("Done processing this line.\n"); // TODO: REMOVE
+
+//  free(token);
+//  free(uppercase_token);
 
   return;
 }
 
 
-void process_element(STRING element)
+void do_adjustment(unsigned long long line_size)
 {
-  /* Do things with the element given.
+  /* Read a statement and set adjustment to the amount a variable will be
+     adjusted. Stop reading when we hit a variable. */
+  STRING token = malloc(line_size);
+  STRING uppercase_token = malloc(line_size);
 
-  */
-  STRING uppercase_element;
-  long long temp;
+//  printf("doing adjustment\n"); // TODO: remove
 
-  uppercase_element = malloc(sizeof(element));
-  check_malloc(uppercase_element);
-  convert_to_upper(element, uppercase_element);
+  check_malloc(token);
+  check_malloc(uppercase_token);
 
-    if (are_equivalent(uppercase_element, "YOLO"))
+  token = strtok(NULL, delimeters);
+  convert_to_upper(token, uppercase_token);
+
+//  printf("first token in do_adjustment: %s\n", token);
+
+  while (uppercase_token != NULL)
+  {
+    convert_to_upper(token, uppercase_token);
+
+    if (are_equivalent(uppercase_token, "SWAG"))
     {
-      // Declare variable
-      printf("doing yolo\n");
-      // Add a new value to memory and increment the stack pointer
-      active_address = stack_pointer;
-      stack_pointer++;      
+      adjustment++;
     }
-    else if (are_equivalent(uppercase_element, "SWAG"))
+    else if (are_equivalent(uppercase_token, "RATCHET"))
     {
-      // Increment variable
-      printf("doing swag\n");
-      memory[active_address].data = memory[active_address].data + 1;
-      printf("DATA: %c\n", memory[active_address].data);
-    }
-    else if (are_equivalent(uppercase_element, "RATCHET"))
-    {
-      // Decrement variable
-      printf("doing ratchet\n");
-    }
-    else if (are_equivalent(uppercase_element, "HOLLA"))
-    {
-      // Print variable
-      printf("doing holla\n");
-      printf("DATA: %c\n", memory[active_address].data);
+      adjustment--;
     }
     else
     {
-      // It's a variable name
-      // Check if the Variable with name element exists
-      printf("about to check if variable exists\n");
-      temp = variable_address(element);
-      if (temp == 0)
+      // This token might be a variable
+      active_address = variable_address(token);
+
+      if (active_address != 0)
       {
-        // Create new Variable
-        Variable *v = malloc(sizeof(Variable));
-        check_malloc(v);
-        v->name = element;
-        v->data = 0;
-        memory[active_address] = *v;
-        printf("data: %d\n", memory[active_address].data);
+        // Variable exists
+        memory[active_address].data += adjustment;
+
+        // TODO: remove these prints
+//        printf("new value: %d\n", memory[active_address].data);
+//        printf("name: %s\n", memory[active_address].name);
       }
       else
       {
-        active_address = temp;
+        // Variable did not exist
+        fprintf(stderr, "ERROR: %s undeclared at line %llu\n", token, line_number);
+        exit(-1);
       }
-
+      adjustment = 0;
+      return;
     }
 
+//    printf("adjustment: %d\n", adjustment); // TODO: remove
+    token = strtok(NULL, delimeters);
+  //  printf("next token in do_adjustment: %s\n", token); // TODO: remove
+  }
+
+  fprintf(stderr, "ERROR: No variable for line %llu found\n", line_number);
+  adjustment = 0;
+  exit(-1);
 }
 
 
 //TODO
-long long variable_address(STRING element)
+unsigned long long variable_address(STRING element)
 {
   /* Return the address in virtual memory of the variable with name element.
      Return 0 if that element could not be found.
   
   */
-  long long i = stack_pointer;
-  for(; i >= 0; i--)
+  unsigned long long i = stack_pointer;
+  for(; i > 0; i--)
   {
+/*    printf("memory[%llu].name: %s\n", i, memory[i].name);
+    if (memory[i].name != NULL)
+    {
+      printf("length of .name: %d\n", strlen(memory[i].name)); // TODO: remove
+    } */ // TODO: remove previous block
     if(memory[i].name != NULL && are_equivalent(element, memory[i].name))
     {
       return i;
@@ -321,6 +482,7 @@ bool are_equivalent(STRING s1, STRING s2)
   // Check if their lengths are the same
   if (strlen(s1) != strlen(s2))
   {
+//    printf("%s and %s are not equivalent\n", s1, s2); // TODO: remove
     return FALSE;
   }
 
@@ -328,8 +490,10 @@ bool are_equivalent(STRING s1, STRING s2)
   result = memcmp(s1, s2, strlen(s1));
   if (result == 0) // 0 means no characters differ
   {
+//    printf("%s and %s ARE equivalent\n", s1, s2); // TODO: remove
     return TRUE;
   }
+//  printf("%s and %s are not equivalent\n", s1, s2); // TODO: remove
   return FALSE;
 }
 
