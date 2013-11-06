@@ -1,3 +1,6 @@
 *.exe
 *.exe.stackdump
-
+*.c~
+*.~
+*.ys~
+*.gitignore~

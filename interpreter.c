@@ -23,13 +23,13 @@ unsigned long long line_number = 0;
 bool debug = FALSE;
 
 // An entry in memory
+typedef
 struct Variable
 {
   char data;
   STRING name;
-};
+} Variable;
 
-typedef struct Variable Variable;
 Variable *memory; // "Virtual" memory. address 0 is NULL
 unsigned long long memory_size = 1024; // Default memory size
 unsigned long long active_address; // Location in memory of the variable to modify
