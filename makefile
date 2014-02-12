@@ -1,3 +1,3 @@
 # The interpreter for Yoloswag
-yoloswag: interpreter.c
-	gcc interpreter.c -o yoloswag
+yoloswag: interpreter.c interpreter.h
+	gcc interpreter.c interpreter.h -o yoloswag

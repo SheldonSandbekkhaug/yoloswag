@@ -9,12 +9,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "interpreter.h"
 
-typedef char bool;
-#define TRUE 1
-#define FALSE 0
 
-typedef char* STRING;
 #define starting_buffer_size 32
 char delimeters[16];
 
@@ -22,28 +19,12 @@ FILE *input;
 unsigned long long line_number = 0;
 bool debug = FALSE;
 
-// An entry in memory
-typedef
-struct Variable
-{
-  char data;
-  STRING name;
-} Variable;
 
 Variable *memory; // "Virtual" memory. address 0 is NULL
 unsigned long long memory_size = 1024; // Default memory size
 unsigned long long active_address; // Location in memory of the variable to modify
 unsigned long long stack_pointer = 1;
 char adjustment;
-
-void scan_args(STRING s);
-void read_input(FILE *source);
-void process_line(STRING line);
-void do_adjustment(unsigned long long line_size);
-unsigned long long variable_address(STRING element);
-bool are_equivalent(STRING s1, STRING s2);
-void convert_to_upper(STRING src, STRING dest);
-bool check_malloc(void* pointer);
 
 
 int main(int argc, STRING *argv)
@@ -95,7 +76,7 @@ int main(int argc, STRING *argv)
 
 
     // TODO: Write a function to free everything in memory
-/*    for(stack_pointer = stack_pointer - 1;stack_pointer >= 0; stack_pointer--)
+/*    for(stack_pointer = stack_pointer - 1; stack_pointer >= 0; stack_pointer--)
     {
       printf("freeing %x\n", &memory[stack_pointer]);
       if (&memory[stack_pointer] != NULL)
@@ -120,7 +101,7 @@ void scan_args(STRING s)
         switch (*s)
             {
             case 'M': // Maximum memory usage for client program data
-                *s++;
+                s = s + 1;
                 memory_size = atoi(s);
 
                 // Stop loop from reading the rest of this argument
@@ -168,10 +149,6 @@ void read_input(FILE *source)
     {
       buffer[line_length] = '\0';
 
-      // TODO: remove
-//      printf("line_length: %llu\n", line_length);
-//      printf("buffer: %s\n", buffer);
-
       // Don't process the line unless something is in it
       if (line_length > 0) process_line(buffer);
       free(buffer);
@@ -194,9 +171,7 @@ void read_input(FILE *source)
     {
       if (line_length >= buffer_size-1)
       {
-//        printf("increasing buffer size from %llu\n", buffer_size); //TODO: remove
         // Increase the size of the buffer
-        //buffer[line_length] = '\0';
         buffer = realloc(buffer, 2 * (line_length+1) * sizeof(char));
         check_malloc(buffer);
         buffer_size = 2 * (line_length + 1);
@@ -273,10 +248,6 @@ void process_line(STRING line)
       active_address = stack_pointer;
       memory[active_address] = *v;
 
-      // TODO: remove
-//      printf("name: %s\n", memory[active_address].name);
-//      printf("data: %d\n", memory[active_address].data);
-
       stack_pointer++;
     }
     else
@@ -351,7 +322,6 @@ void process_line(STRING line)
   }
   else
   {
-    printf("unknown token found: %s\n", uppercase_token); // TODO: remove
 
 /*    // It's a variable name
     // Check if the Variable with name token exists
@@ -365,7 +335,6 @@ void process_line(STRING line)
       v->name = token;
       v->data = 0;
       memory[active_address] = *v;
-      //printf("data: %d\n", memory[active_address].data); // TODO: remove
     }
     else
     {
@@ -374,8 +343,6 @@ void process_line(STRING line)
   }
 
   adjustment = 0;
-
-//  printf("Done processing this line.\n"); // TODO: REMOVE
 
 //  free(token);
 //  free(uppercase_token);
@@ -391,15 +358,11 @@ void do_adjustment(unsigned long long line_size)
   STRING token = malloc(line_size);
   STRING uppercase_token = malloc(line_size);
 
-//  printf("doing adjustment\n"); // TODO: remove
-
   check_malloc(token);
   check_malloc(uppercase_token);
 
   token = strtok(NULL, delimeters);
   convert_to_upper(token, uppercase_token);
-
-//  printf("first token in do_adjustment: %s\n", token);
 
   while (uppercase_token != NULL)
   {
@@ -422,10 +385,6 @@ void do_adjustment(unsigned long long line_size)
       {
         // Variable exists
         memory[active_address].data += adjustment;
-
-        // TODO: remove these prints
-//        printf("new value: %d\n", memory[active_address].data);
-//        printf("name: %s\n", memory[active_address].name);
       }
       else
       {
@@ -437,9 +396,7 @@ void do_adjustment(unsigned long long line_size)
       return;
     }
 
-//    printf("adjustment: %d\n", adjustment); // TODO: remove
     token = strtok(NULL, delimeters);
-  //  printf("next token in do_adjustment: %s\n", token); // TODO: remove
   }
 
   fprintf(stderr, "ERROR: No variable for line %llu found\n", line_number);
@@ -448,7 +405,6 @@ void do_adjustment(unsigned long long line_size)
 }
 
 
-//TODO
 unsigned long long variable_address(STRING element)
 {
   /* Return the address in virtual memory of the variable with name element.
@@ -458,11 +414,6 @@ unsigned long long variable_address(STRING element)
   unsigned long long i = stack_pointer;
   for(; i > 0; i--)
   {
-/*    printf("memory[%llu].name: %s\n", i, memory[i].name);
-    if (memory[i].name != NULL)
-    {
-      printf("length of .name: %d\n", strlen(memory[i].name)); // TODO: remove
-    } */ // TODO: remove previous block
     if(memory[i].name != NULL && are_equivalent(element, memory[i].name))
     {
       return i;
@@ -482,7 +433,6 @@ bool are_equivalent(STRING s1, STRING s2)
   // Check if their lengths are the same
   if (strlen(s1) != strlen(s2))
   {
-//    printf("%s and %s are not equivalent\n", s1, s2); // TODO: remove
     return FALSE;
   }
 
@@ -490,10 +440,8 @@ bool are_equivalent(STRING s1, STRING s2)
   result = memcmp(s1, s2, strlen(s1));
   if (result == 0) // 0 means no characters differ
   {
-//    printf("%s and %s ARE equivalent\n", s1, s2); // TODO: remove
     return TRUE;
   }
-//  printf("%s and %s are not equivalent\n", s1, s2); // TODO: remove
   return FALSE;
 }
 
